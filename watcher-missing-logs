@@ -1,0 +1,59 @@
+PUT _watcher/watch/missing_logs
+{
+  "trigger": {
+    "schedule": {
+      "interval": "1d"
+    }
+  },
+  "input": {
+    "search": {
+      "request": {
+        "indices": ["your-index-name"],
+        "body": {
+          "query": {
+            "bool": {
+              "must": [
+                {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "now-1d"
+                    }
+                  }
+                }
+              ],
+              "filter": {
+                "terms": {
+                  "host.keyword": ["host1", "host2", "host3"] 
+                  // Add the names of your hosts here in this array
+                }
+              }
+            }
+          },
+          "aggs": {
+            "hosts": {
+              "terms": {
+                "field": "host.keyword",
+                "size": 1000
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "condition": {
+    "script": {
+      "source": "boolean missing = false; for (agg in ctx.payload.aggregations.hosts.buckets) { if (agg.doc_count == 0) { missing = true } } return missing",
+      "lang": "painless"
+    }
+  },
+  "actions": {
+    "send_email": {
+      "email": {
+        "to": "your-email-address",
+        "subject": "Missing Logs Alert",
+        "body": "No logs from {{ctx.payload.hosts}} for the past day."
+      }
+    }
+  }
+}
